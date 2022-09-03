@@ -39,10 +39,41 @@ auto to_vec4(const Eigen::Vector3f& v3, float w = 1.0f)
     return Vector4f(v3.x(), v3.y(), v3.z(), w);
 }
 
+bool SameSide(const Vector3f& A, const Vector3f& B, const Vector3f& C, const Vector3f& P)
+{
+    Vector3f AB = B - A;
+    Vector3f AC = C - A;
+    Vector3f AP = P - A;
 
-static bool insideTriangle(int x, int y, const Vector3f* _v)
-{   
-    // TODO : Implement this function to check if the point (x, y) is inside the triangle represented by _v[0], _v[1], _v[2]
+    Vector3f v1 = AB.cross(AC);
+    Vector3f v2 = AB.cross(AP);
+
+    return v1.dot(v2) >= 0;
+}
+
+static float insideTriangle(int x, int y, const Vector3f* _v)
+{
+    /*   同向法
+    Vector3f P(x, y, 1);
+    bool in = SameSide(_v[0], _v[1], _v[2], P) &&
+              SameSide(_v[1], _v[2], _v[0], P) &&
+              SameSide(_v[2], _v[0], _v[1], P);
+    return in;
+    */
+
+    Vector3f Q(x,y,0);
+
+    Vector3f p0p1 = _v[1] - _v[0];
+    Vector3f p0Q = Q - _v[0];
+
+    Vector3f p1p2 = _v[2] - _v[1];
+    Vector3f p1Q = Q - _v[1];
+
+    Vector3f p2p0 = _v[0] - _v[2];
+    Vector3f p2Q = Q - _v[2];
+
+    //类定义里面已经定义是逆时针，所以只用考虑同正情况。
+    return p0p1.cross(p0Q).z() > 0 && p1p2.cross(p1Q).z() > 0 && p2p0.cross(p2Q).z() > 0;
 }
 
 static std::tuple<float, float, float> computeBarycentric2D(float x, float y, const Vector3f* v)
@@ -102,18 +133,65 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
     }
 }
 
+template <typename T, typename... args>
+float GetMin(T& left, T& right, args... argv)
+{
+    return GetMin(left < right ? left : right, argv...);
+}
+template <typename T>
+float GetMin(T& left, T& right)
+{
+    return left < right ? left : right;
+}
+
+template <typename T, typename... args>
+float GetMax(T& left, T& right, args... argv)
+{
+    return GetMax(left > right ? left : right, argv...);
+}
+template <typename T>
+float GetMax(T& left, T& right)
+{
+    return left > right ? left : right;
+}
+
 //Screen space rasterization
 void rst::rasterizer::rasterize_triangle(const Triangle& t) {
     auto v = t.toVector4();
-    
-    // TODO : Find out the bounding box of current triangle.
-    // iterate through the pixel and find if the current pixel is inside the triangle
+    Vector3f v3[3] = {
+        Vector3f(v[0].x(), v[0].y(), 1),
+        Vector3f(v[1].x(), v[1].y(), 1),
+        Vector3f(v[2].x(), v[2].y(), 1)
+    };
+    // 获取三角形包围盒
+    float minX = GetMin(v[0].x(), v[1].x(), v[2].x());
+    float maxX = GetMax(v[0].x(), v[1].x(), v[2].x());
+    float minY = GetMin(v[0].y(), v[1].y(), v[2].y());
+    float maxY = GetMax(v[0].y(), v[1].y(), v[2].y());
 
-    // If so, use the following code to get the interpolated z value.
-    //auto[alpha, beta, gamma] = computeBarycentric2D(x, y, t.v);
-    //float w_reciprocal = 1.0/(alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
-    //float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
-    //z_interpolated *= w_reciprocal;
+    // 遍历包围盒像素
+    for (int y = minY; y <= maxY; y++)
+    {
+        for (int x = minX; x <= maxX; x++)
+        {
+            // 不在三角形内则不处理
+            if (!insideTriangle(x, y, v3))
+            {
+                continue;
+            }
+            // 获取深度
+            auto [alpha, beta, gamma] = computeBarycentric2D(x, y, t.v);
+            float w_reciprocal = 1.0 / (alpha / v[0].w() + beta / v[1].w() + gamma / v[2].w());
+            float z_interpolated = alpha * v[0].z() / v[0].w() + beta * v[1].z() / v[1].w() + gamma * v[2].z() / v[2].w();
+            z_interpolated *= w_reciprocal;
+            // 深度更低，则显示
+            if (z_interpolated < depth_buf[get_index(x, y)])
+            {
+                depth_buf[get_index(x, y)] = z_interpolated;
+                set_pixel(Eigen::Vector3f(x, y, z_interpolated), t.getColor());
+            }
+        }
+    }
 
     // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
 }
