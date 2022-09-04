@@ -51,7 +51,7 @@ bool SameSide(const Vector3f& A, const Vector3f& B, const Vector3f& C, const Vec
     return v1.dot(v2) >= 0;
 }
 
-static float insideTriangle(int x, int y, const Vector3f* _v)
+static float insideTriangle(float x, float y, const Vector3f* _v)
 {
     /*   同向法
     Vector3f P(x, y, 1);
@@ -132,27 +132,26 @@ void rst::rasterizer::draw(pos_buf_id pos_buffer, ind_buf_id ind_buffer, col_buf
         rasterize_triangle(t);
     }
 }
-
-template <typename T, typename... args>
-float GetMin(T& left, T& right, args... argv)
-{
-    return GetMin(left < right ? left : right, argv...);
-}
 template <typename T>
-float GetMin(T& left, T& right)
+T GetMin(T& left, T& right)
 {
     return left < right ? left : right;
 }
-
 template <typename T, typename... args>
-float GetMax(T& left, T& right, args... argv)
+T GetMin(T& left, T& right, args&... argv)
 {
-    return GetMax(left > right ? left : right, argv...);
+    return GetMin(left < right ? left : right, argv...);
 }
+
 template <typename T>
-float GetMax(T& left, T& right)
+T GetMax(T& left, T& right)
 {
     return left > right ? left : right;
+}
+template <typename T, typename... args>
+T GetMax(T& left, T& right, args&... argv)
+{
+    return GetMax(left > right ? left : right, argv...);
 }
 
 //Screen space rasterization
@@ -164,18 +163,36 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
         Vector3f(v[2].x(), v[2].y(), 1)
     };
     // 获取三角形包围盒
-    float minX = GetMin(v[0].x(), v[1].x(), v[2].x());
-    float maxX = GetMax(v[0].x(), v[1].x(), v[2].x());
-    float minY = GetMin(v[0].y(), v[1].y(), v[2].y());
-    float maxY = GetMax(v[0].y(), v[1].y(), v[2].y());
+    float minX = GetMin(v[0].x(), v[1].x(), v[2].x()) - 1;
+    float maxX = GetMax(v[0].x(), v[1].x(), v[2].x()) + 1;
+    float minY = GetMin(v[0].y(), v[1].y(), v[2].y()) - 1;
+    float maxY = GetMax(v[0].y(), v[1].y(), v[2].y()) + 1;
+
+    // 2*2 MSAA采样
+    float fill = 0;
+    int samplingSelectX = 4, samplingSelectY = 4, fillCount = 0;
+    float stepX = 1.f / samplingSelectX, stepY = 1.f / samplingSelectY;
 
     // 遍历包围盒像素
     for (int y = minY; y <= maxY; y++)
     {
         for (int x = minX; x <= maxX; x++)
         {
-            // 不在三角形内则不处理
-            if (!insideTriangle(x, y, v3))
+            // 2*2 MSAA采样
+            fill = 0;
+            fillCount = 0;
+            for (float samplingX = x - 0.5f + stepX / 2.f; samplingX < x + 0.5f; samplingX += stepX)
+            {
+                for (float samplingY = y - 0.5f + stepY / 2.f; samplingY < y + 0.5f; samplingY += stepY)
+                {
+                    if (insideTriangle(samplingX, samplingY, v3))
+                    {
+                        fillCount++;
+                    }
+                }
+            }
+            fill = 1.f * fillCount / (samplingSelectX * samplingSelectY);
+            if (!fillCount)
             {
                 continue;
             }
@@ -188,12 +205,11 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
             if (z_interpolated < depth_buf[get_index(x, y)])
             {
                 depth_buf[get_index(x, y)] = z_interpolated;
+                Eigen::Vector3f color = fill * t.getColor() + (1 - fill) * get_pixel(Eigen::Vector3f(x, y, z_interpolated));
                 set_pixel(Eigen::Vector3f(x, y, z_interpolated), t.getColor());
             }
         }
     }
-
-    // TODO : set the current pixel (use the set_pixel function) to the color of the triangle (use getColor function) if it should be painted.
 }
 
 void rst::rasterizer::set_model(const Eigen::Matrix4f& m)
@@ -239,7 +255,13 @@ void rst::rasterizer::set_pixel(const Eigen::Vector3f& point, const Eigen::Vecto
     //old index: auto ind = point.y() + point.x() * width;
     auto ind = (height-1-point.y())*width + point.x();
     frame_buf[ind] = color;
+}
 
+Eigen::Vector3f rst::rasterizer::get_pixel(const Eigen::Vector3f& point)
+{
+    //old index: auto ind = point.y() + point.x() * width;
+    auto ind = (height - 1 - point.y()) * width + point.x();
+    return frame_buf[ind];
 }
 
 // clang-format on
