@@ -181,9 +181,9 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
             // 2*2 MSAA²ÉÑù
             fill = 0;
             fillCount = 0;
-            for (float samplingX = x - 0.5f + stepX / 2.f; samplingX < x + 0.5f; samplingX += stepX)
+            for (float samplingX = x + stepX / 2.f; samplingX < x + 1.f; samplingX += stepX)
             {
-                for (float samplingY = y - 0.5f + stepY / 2.f; samplingY < y + 0.5f; samplingY += stepY)
+                for (float samplingY = y + stepY / 2.f; samplingY < y + 1.f; samplingY += stepY)
                 {
                     if (insideTriangle(samplingX, samplingY, v3))
                     {
@@ -205,8 +205,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
             if (z_interpolated < depth_buf[get_index(x, y)])
             {
                 depth_buf[get_index(x, y)] = z_interpolated;
-                Eigen::Vector3f color = fill * t.getColor() + (1 - fill) * get_pixel(Eigen::Vector3f(x, y, z_interpolated));
-                set_pixel(Eigen::Vector3f(x, y, z_interpolated), color);
+                set_pixel(Eigen::Vector3f(x, y, z_interpolated), fill * t.getColor());
             }
         }
     }
@@ -255,13 +254,6 @@ void rst::rasterizer::set_pixel(const Eigen::Vector3f& point, const Eigen::Vecto
     //old index: auto ind = point.y() + point.x() * width;
     auto ind = (height-1-point.y())*width + point.x();
     frame_buf[ind] = color;
-}
-
-Eigen::Vector3f rst::rasterizer::get_pixel(const Eigen::Vector3f& point)
-{
-    //old index: auto ind = point.y() + point.x() * width;
-    auto ind = (height - 1 - point.y()) * width + point.x();
-    return frame_buf[ind];
 }
 
 // clang-format on
