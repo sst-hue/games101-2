@@ -33,7 +33,7 @@ Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float z
     // TODO: Copy-paste your implementation from the previous assignment.
     Eigen::Matrix4f projection = Eigen::Matrix4f::Identity();
 
-    float height = tan((eye_fov / 360) * MY_PI) * abs(zNear);
+    float height = -tan((eye_fov / 360) * MY_PI) * abs(zNear);
     float weight = height / aspect_ratio;
 
     // TODO: Implement this function
@@ -42,19 +42,26 @@ Eigen::Matrix4f get_projection_matrix(float eye_fov, float aspect_ratio, float z
 
     // Õ∏ ”æÿ’Û
     Eigen::Matrix4f translate1;
-    translate1 << zNear, 0, 0, 0,
-        0, zNear, 0, 0,
-        0, 0, (zNear + zFar), -1.0 * zNear * zFar,
-        0, 0, 1, 0;
+    translate1 <<   zNear,  0,      0,                  0,
+                    0,      zNear,  0,                  0,
+                    0,      0,      (zNear + zFar),     -1.0 * zNear * zFar,
+                    0,      0,      1,                  0;
 
-    // ’˝Ωªæÿ’Û
+    // ∆Ω“∆æÿ’Û
     Eigen::Matrix4f translate2;
-    translate2 << 1.f / weight, 0, 0, 0,
-        0, 1.f / height, 0, 0,
-        0, 0, 2.f / (zNear - zFar), -(zNear - zFar) / 2.f,
-        0, 0, 0, 1;
+    translate2 <<   1,  0,  0,  0,
+                    0,  1,  0,  0,
+                    0,  0,  1,  -(zNear + zFar) / 2.f,
+                    0,  0,  0,  1.f;
 
-    projection = translate2 * translate1 * projection;
+    // Àı∑≈æÿ’Û
+    Eigen::Matrix4f translate3;
+    translate3 <<   1.f / weight,   0,              0,                      0,
+                    0,              1.f / height,   0,                      0,
+                    0,              0,              2.f / (zNear - zFar),   0,
+                    0,              0,              0,                      1.f;
+
+    projection = (translate3 * translate2) * translate1 * projection;
 
     return projection;
 }
