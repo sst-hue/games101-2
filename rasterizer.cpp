@@ -170,7 +170,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
 
     // 2*2 MSAA采样
     float fill = 0;
-    int samplingSelectX = 4, samplingSelectY = 4, fillCount = 0;
+    int samplingSelectX = 2, samplingSelectY = 2, fillCount = 0;
     float stepX = 1.f / samplingSelectX, stepY = 1.f / samplingSelectY;
 
     // 遍历包围盒像素
@@ -206,7 +206,7 @@ void rst::rasterizer::rasterize_triangle(const Triangle& t) {
             {
                 depth_buf[get_index(x, y)] = z_interpolated;
                 Eigen::Vector3f color = fill * t.getColor() + (1 - fill) * get_pixel(Eigen::Vector3f(x, y, z_interpolated));
-                set_pixel(Eigen::Vector3f(x, y, z_interpolated), t.getColor());
+                set_pixel(Eigen::Vector3f(x, y, z_interpolated), color);
             }
         }
     }
